@@ -1,0 +1,218 @@
+// ---------- Static asset paths ----------
+const permitPhoto = "/assets/permit-photo-DU2UZHrV.jpg";
+const signatureImg = "/assets/signature-CXazyEj2.png";
+const steeringWheel = "/assets/steering-wheel-C_N0PjLr.png";
+const barcodeImg = "/assets/barcode-97MyHtOO.png";
+const saLogo = "/assets/sa-logo-lYGUxK7Q.png";
+
+// ---------- Default permit data ----------
+const DEFAULT_PERMIT = {
+  licenceNumber: "JJ2305",
+  cardId: "D04014079",
+  dob: "05/05/2009",
+  licenceClass: "C",
+  firstName: "CHRISTOPHER",
+  middleName: "WILLIAM",
+  lastName: "WALKER",
+  address: "49 DRAKE AVENUE FLINDERS PARK SA 5025",
+  activeUntil: "22 September 2028",
+  organDonor: true,
+  photo: null,
+  signature: null,
+};
+
+const PLACEHOLDERS = {
+  firstName: DEFAULT_PERMIT.firstName,
+  middleName: DEFAULT_PERMIT.middleName,
+  lastName: DEFAULT_PERMIT.lastName,
+  licenceNumber: DEFAULT_PERMIT.licenceNumber,
+  cardId: DEFAULT_PERMIT.cardId,
+  address: DEFAULT_PERMIT.address,
+  activeUntil: DEFAULT_PERMIT.activeUntil,
+  dob: DEFAULT_PERMIT.dob,
+};
+
+// Merge stored data over defaults, blank fields fall back, class forced to "C"
+function mergePermit(data) {
+  const merged = { ...DEFAULT_PERMIT, ...data, licenceClass: "C" };
+  for (const key of Object.keys(PLACEHOLDERS))
+    if (typeof merged[key] === "string" && !merged[key].trim())
+      merged[key] = DEFAULT_PERMIT[key];
+  return merged;
+}
+
+// DD/MM/YYYY <-> YYYY-MM-DD converters for <input type="date">
+function toInputDate(d) {
+  const [day, month, year] = d.split("/");
+  if (!day || !month || !year) return "";
+  return `${year.padStart(4,"0")}-${month.padStart(2,"0")}-${day.padStart(2,"0")}`;
+}
+function fromInputDate(v) {
+  const [y, m, d] = v.split("-");
+  if (!d || !m || !y) return v;
+  return `${d}/${m}/${y}`;
+}
+
+// ---------- Settings sheet (IS-style back nav + Edit Details form) ----------
+function SettingsSheet({ onClose }) {
+  const [editing, setEditing] = useState(false);
+  const photoRef = useRef(null);
+  const sigRef = useRef(null);
+  const [data, setData] = useState(() => {
+    try { return mergePermit(JSON.parse(localStorage.getItem("permit-data-v2") || "{}")); }
+    catch { return DEFAULT_PERMIT; }
+  });
+
+  const set = (k, v) => setData(p => ({ ...p, [k]: v, licenceClass: "C" }));
+  const readFile = (file, key) => {
+    const fr = new FileReader();
+    fr.onload = e => set(key, e.target?.result);
+    fr.readAsDataURL(file);
+  };
+  const save = () => {
+    const next = { ...data, licenceClass: "C" };
+    localStorage.setItem("permit-data-v2", JSON.stringify(next));
+    window.dispatchEvent(new Event("storage"));
+    setData(next);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "hsl(240, 20%, 96%)" }}>
+        {/* safe-area spacer */}
+        <div className="bg-black flex-shrink-0" style={{ height: "env(safe-area-inset-top, 44px)", minHeight: 44 }} />
+        <div className="bg-black flex items-center px-3 py-3 relative">
+          <button onClick={() => setEditing(false)} className="flex items-center active:opacity-70" style={{ color: "hsl(230, 90%, 75%)" }}>
+            <ChevronLeft size={26} strokeWidth={2.5} />
+            <span className="text-base font-normal -ml-1">Settings</span>
+          </button>
+          <span className="text-white font-semibold text-base absolute left-1/2 -translate-x-1/2">Edit Details</span>
+          <button onClick={save} className="absolute right-4 text-base font-semibold" style={{ color: "hsl(230, 90%, 75%)" }}>Save</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+          {/* Photo picker */}
+          <div className="rounded-xl bg-white border border-gray-200 p-4 flex flex-col items-center gap-2">
+            <button type="button" onClick={() => photoRef.current?.click()}
+              className="w-24 h-28 rounded-xl overflow-hidden border border-gray-300 active:opacity-80">
+              <img src={data.photo || permitPhoto} alt="ID" className="w-full h-full object-cover object-top" />
+            </button>
+            <button type="button" onClick={() => photoRef.current?.click()}
+              className="text-sm font-medium" style={{ color: "hsl(230, 90%, 65%)" }}>Change ID Photo</button>
+            <input ref={photoRef} type="file" accept="image/*" className="hidden"
+              onChange={e => e.target.files?.[0] && readFile(e.target.files[0], "photo")} />
+          </div>
+
+          {/* Text fields */}
+          {[["First Name","firstName"],["Middle Name","middleName"],["Last Name","lastName"],
+            ["Licence Number","licenceNumber"],["Card Identification Number","cardId"],
+            ["Address","address"],["Active Until","activeUntil"]].map(([label, key]) => (
+            <label key={key} className="block">
+              <span className="text-xs text-gray-500 uppercase tracking-wide">{label}</span>
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-base text-black placeholder:text-gray-400 outline-none"
+                style={{ color: "#000", WebkitTextFillColor: "#000" }}
+                placeholder={PLACEHOLDERS[key] || "Example"}
+                value={String(data[key] || "")}
+                onChange={e => set(key, e.target.value)}
+              />
+            </label>
+          ))}
+
+          {/* DOB */}
+          <label className="block">
+            <span className="text-xs text-gray-500 uppercase tracking-wide">Date of Birth</span>
+            <input type="date"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-base text-black outline-none"
+              style={{ color: "#000", WebkitTextFillColor: "#000" }}
+              placeholder={DEFAULT_PERMIT.dob}
+              value={toInputDate(data.dob)}
+              onChange={e => set("dob", fromInputDate(e.target.value))} />
+          </label>
+
+          {/* Fixed class row */}
+          <div className="rounded-lg border border-gray-300 bg-white px-3 py-3 flex items-center justify-between">
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide block">Class</span>
+              <span className="text-base text-black font-medium">C</span>
+              <span className="text-base text-black ml-6">Car</span>
+            </div>
+            <span className="text-xs text-gray-400">Fixed</span>
+          </div>
+
+          {/* Organ donor */}
+          <label className="flex items-center justify-between rounded-lg bg-white border border-gray-300 px-3 py-3">
+            <span className="text-base text-black">Show as Organ Donor</span>
+            <input type="checkbox" className="h-5 w-5 accent-blue-500"
+              checked={!!data.organDonor} onChange={e => set("organDonor", e.target.checked)} />
+          </label>
+
+          {/* Signature picker */}
+          <div className="rounded-xl bg-white border border-gray-200 p-4 flex flex-col items-center gap-2">
+            <button type="button" onClick={() => sigRef.current?.click()}
+              className="w-full h-24 rounded-lg border border-gray-200 flex items-center justify-center p-2 active:opacity-80">
+              <img src={data.signature || signatureImg} alt="Signature" className="h-full w-auto object-contain" />
+            </button>
+            <button type="button" onClick={() => sigRef.current?.click()}
+              className="text-sm font-medium" style={{ color: "hsl(230, 90%, 65%)" }}>Change Signature</button>
+            <input ref={sigRef} type="file" accept="image/*" className="hidden"
+              onChange={e => e.target.files?.[0] && readFile(e.target.files[0], "signature")} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Settings list view ----
+  const Row = ({ label, trailing, onClick }) => (
+    <button onClick={onClick} className="w-full flex items-center justify-between px-5 py-3.5 bg-white active:bg-gray-100 text-left">
+      <span className="text-base text-black">{label}</span>
+      {trailing ?? <ChevronRight size={20} className="text-gray-400" />}
+    </button>
+  );
+  const Toggle = ({ initialOn }) => {
+    const [on, setOn] = useState(initialOn);
+    return (
+      <button onClick={() => setOn(v => !v)} className="relative w-12 h-7 rounded-full transition-colors flex-shrink-0"
+        style={{ background: on ? "hsl(230, 80%, 70%)" : "hsl(0, 0%, 85%)" }}>
+        <div className="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform"
+          style={{ transform: on ? "translateX(22px)" : "translateX(2px)" }} />
+      </button>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col animate-in slide-in-from-right duration-300"
+      style={{ background: "hsl(240, 20%, 96%)" }}>
+      <div className="bg-black flex-shrink-0" style={{ height: "env(safe-area-inset-top, 44px)", minHeight: 44 }} />
+      <div className="bg-black flex items-center px-3 py-3 relative">
+        <button onClick={onClose} className="flex items-center text-white active:opacity-70" style={{ color: "hsl(230, 90%, 75%)" }}>
+          <ChevronLeft size={26} strokeWidth={2.5} />
+          <span className="text-base font-normal -ml-1">Credentials</span>
+        </button>
+        <span className="text-white font-semibold text-base absolute left-1/2 -translate-x-1/2">Settings</span>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="h-6" />
+        <div className="border-t border-b border-gray-200 divide-y divide-gray-200">
+          <Row label="Change Passcode" />
+          <Row label="Unlock with Face ID" trailing={<Toggle initialOn />} />
+          <Row label="Validation Sounds" trailing={<Toggle initialOn={false} />} />
+          <Row label="Renewal Reminders" />
+        </div>
+        <div className="h-6" />
+        <div className="border-t border-b border-gray-200 divide-y divide-gray-200">
+          <Row label="Validation History" />
+          <Row label="About" />
+          <Row label="Troubleshooting" />
+          <Row label="Send Feedback" />
+        </div>
+        <div className="px-5 py-3"><p className="text-sm text-gray-500">Version 1.8.7 (134548)</p></div>
+        <div className="border-t border-b border-gray-200">
+          <Row label="Log Out" trailing={<span />} onClick={() => setEditing(true)} />
+        </div>
+      </div>
+    </div>
+  );
+}
